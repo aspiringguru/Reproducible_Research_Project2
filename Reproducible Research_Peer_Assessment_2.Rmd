@@ -1,0 +1,236 @@
+---
+title: "Reproducible Research: Peer Assessment 2"
+output: 
+  html_document:
+    keep_md: true
+---
+
+U.S. National Oceanic and Atmospheric Administration’s (NOAA) storm database analysis
+## Synopsis  
+This report summarises data from the U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database. The data records weather events from 1950 to 2011.
+
+This report addresses the following questions:
+Q1. Across the United States, which types of events (as indicated in the EVTYPE variable) are most harmful with respect to population health?
+Q2. Across the United States, which types of events have the greatest economic consequences?
+
+The Storm Data Documentation provides a list of the event types recorded in section 7.1 through to 7.48. Examination of the data identified inconsistent naming and a data cleaning process was used to summarise similar event types. 
+
+Q1. A list of the top 5 event types by fatality and injury was produced. Tornadoes were identified as the most harmful, accounting for over 5,700 fatalities and over 91,000 injuries.
+
+Q2. A list of the top 5 event types by total economic damage was produced. Economic damage was deemed to include all Property Damage and Crop Damage. Financial adjustments for loss of life or injury were not added to the raw property and crop damage data. 
+
+
+## Data Processing 
+
+Load packages required to execute.  
+Installation of packages commented out since only needed to execute once.
+```{r}
+##install.packages("dplyr")
+##install.packages("reshape2")
+##install.packages("ggplot2")
+library(dplyr)
+library(reshape2)
+library(ggplot2)
+```
+
+Read the data from the original csv.bz2 file.
+```{r}
+setwd("H:/2015/coursera/data_science/reproducible_research/peer_assignment_2")
+stormdata <- read.csv(bzfile("repdata-data-StormData.csv.bz2"))
+```
+
+Perform a brief test of the data to identify top 5 causes of fatalities.
+```{r}
+stormdataMelt <- melt(stormdata, id=c("EVTYPE"), measure.vars=c("FATALITIES", "INJURIES"))
+head(stormdataMelt)
+stormdataDcast <- dcast(stormdataMelt, EVTYPE~variable, sum)
+stormdataDcast <- stormdataDcast[with(stormdataDcast, order(-FATALITIES)), ]
+head(stormdataDcast, 5)
+```
+The top five causes of fatalities were identified to be 
+1. Tornado
+2. Excessive Heat
+3. Flash Flood
+4. Heat
+5. Lightning
+
+```{r}
+stormdataDcast <- stormdataDcast[with(stormdataDcast, order(-INJURIES)), ]
+head(stormdataDcast, 5)
+```
+The top five causes of fatalities were identified to be 
+1. Tornado
+2. TSTM WIND
+3. Flood
+4. Excessive Heat
+5. Lightning
+
+An examination of the 'event type' values recorded identified multiple similar descriptions of events. 
+```{r}
+length(unique(stormdataDcast$EVTYPE))
+head(unique(stormdataDcast$EVTYPE), 50)
+```
+Detailed examination of the 'event type' data concentrated on the values with non-zero fatalities or injuries.
+```{r}
+stormdatatemp <- stormdata
+stormdatatemp$zero <- stormdatatemp$FATALITIES==0 & stormdatatemp$INJURIES==0
+head(stormdatatemp$zero)
+stormdatatemp <- subset(stormdatatemp, !zero)
+head(unique(stormdatatemp$EVTYPE))
+length(unique(stormdatatemp$EVTYPE))
+```
+
+Detailed Data cleaning code below.
+
+Records for the following 'event type' values were combined into 'TORNADO'.
+"HIGH WINDS/SNOW"                "HURRICANE"                      "HURRICANE-GENERATED SWELLS"    
+"Hurricane Edouard"              "HURRICANE EMILY"                "HURRICANE ERIN"                
+"HURRICANE FELIX"                "HURRICANE OPAL"                 "HURRICANE OPAL/HIGH WINDS"     
+"HURRICANE/TYPHOON"   
+"TORNADO"                        "TORNADO F2"                     "TORNADO F3"  
+```{r}
+stormdata$EVTYPE <- gsub("HURRICANE FELIX", "TORNADO", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("HURRICANE/TYPHOON", "TORNADO", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("Hurricane Edouard", "TORNADO", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("HURRICANE EMILY", "TORNADO", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("HURRICANE ERIN", "TORNADO", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("HURRICANE OPAL", "TORNADO", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("HURRICANE OPAL/HIGH WINDS", "TORNADO", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("TORNADO F3", "TORNADO", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("TORNADO F2", "TORNADO", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("TORNADOES, TSTM WIND, HAIL", "TORNADO", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("TYPHOON", "TORNADO", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("HURRICANE-GENERATED SWELLS", "TORNADO", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("HURRICANE OPAL/HIGH WINDS", "TORNADO", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("WATERSPOUT/TORNADO", "TORNADO", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("WATERSPOUT TORNADO", "TORNADO", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("TORNADO/HIGH WINDS", "TORNADO", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("HURRICANE", "TORNADO", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("TORNADO FELIX", "TORNADO", stormdata$EVTYPE)
+```
+
+
+Records for the following 'event type' values were combined into 'FLOOD'.
+"FLOOD/FLASH FLOOD", "FLOODING", "RIVER FLOODING", "MINOR FLOODING", "FLOOD & HEAVY RAIN", 
+"RIVER FLOOD", "FLOOD", "FLOOD/RIVER FLOOD", "RAPIDLY RISING WATER", "FLASH FLOODING/FLOOD"
+"ICE STORM/FLASH FLOOD", "COASTAL FLOOD", "COASTAL FLOOD/EROSION", "URBAN AND SMALL STREAM FLOODIN"
+"Coastal Flooding", "River Flooding", "FLASH FLOODS", "FLASH FLOOD/FLOOD", "FLOOD/FLOOD", 
+"FLASH FLOOD", "MINOR FLOOD" 
+ 
+NB not including "HEAVY RAIN", ,  with "FLASH FLOOD"
+```{r}
+stormdata$EVTYPE <- gsub("FLOOD/FLASH FLOOD", "FLOOD", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("FLOODING", "FLOOD", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("RIVER FLOODING", "FLOOD", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("MINOR FLOODING", "FLOOD", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("FLOOD & HEAVY RAIN", "FLOOD", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("RIVER FLOOD", "FLOOD", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("FLOOD", "FLOOD", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("FLOOD/RIVER FLOOD", "FLOOD", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("RAPIDLY RISING WATER", "FLOOD", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("FLASH FLOODING/FLOOD", "FLOOD", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("ICE STORM/FLASH FLOOD", "FLOOD", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("COASTAL FLOOD", "FLOOD", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("COASTAL FLOOD/EROSION", "FLOOD", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("TIDAL FLOODING", "FLOOD", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("URBAN AND SMALL STREAM FLOODIN", "FLOOD", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("Coastal Flooding", "FLOOD", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("River Flooding", "FLOOD", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("FLASH FLOODS" , "FLOOD", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("FLASH FLOOD/FLOOD", "FLOOD", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("FLOOD/FLOOD", "FLOOD", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("FLASH FLOOD", "FLOOD", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("MINOR FLOOD" , "FLOOD", stormdata$EVTYPE)
+```
+
+Records for 'event types' below were combined into 'LIGHTNING'.
+"LIGHTNING INJURY", "LIGHTNING AND THUNDERSTORM WIN", "LIGHTNING.", 
+```{r}
+stormdata$EVTYPE <- gsub("LIGHTNING." , "LIGHTNING", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("LIGHTNING AND THUNDERSTORM WIN" , "LIGHTNING", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("LIGHTNING INJURY" , "LIGHTNING", stormdata$EVTYPE)
+```
+
+Records for 'event types' below were combined into 'WIND'.
+ "THUNDERSTORM WIND", "STRONG WIND", "THUNDERSTORM WINDSS", "STRONG WINDS", "WIND STORM"
+ "TSTM WIND/HAIL", "Gusty Winds", "HIGH WIND", "RAIN/WIND", "TSTM WIND (G35)", "Gusty winds"
+ "Strong Winds", "THUNDERSTORM  WINDS", "HIGH WINDS/SNOW", "HEAVY SNOW AND HIGH WINDS"
+ "HIGH WINDS", "MARINE TSTM WIND", "MARINE THUNDERSTORM WIND", "MARINE HIGH WIND"
+ "MARINE STRONG WIND"
+```{r} 
+stormdata$EVTYPE <- gsub("TSTM WIND" , "WIND", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("THUNDERSTORM WIND" , "WIND", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("STRONG WIND" , "WIND", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("THUNDERSTORM WINDSS" , "WIND", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("STRONG WINDS" , "WIND", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("WIND STORM" , "WIND", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("TSTM WIND/HAIL" , "WIND", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("Gusty Winds" , "WIND", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("HIGH WIND" , "WIND", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("RAIN/WIND" , "WIND", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("TSTM WIND (G35)" , "WIND", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("Gusty winds" , "WIND", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("Strong Winds" , "WIND", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("THUNDERSTORM  WINDS" , "WIND", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("HIGH WINDS/SNOW" , "WIND", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("HEAVY SNOW AND HIGH WINDS" , "WIND", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("HIGH WINDS" , "WIND", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("MARINE TSTM WIND" , "WIND", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("MARINE THUNDERSTORM WIND" , "WIND", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("MARINE HIGH WIND" , "WIND", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("MARINE STRONG WIND" , "WIND", stormdata$EVTYPE)
+```
+
+Records for 'event types' below were combined into 'LIGHTNING'.
+ "LIGHTNINGNJURY", "LIGHTNINGND THUNDERSTORM WIN"
+```{r} 
+stormdata$EVTYPE <- gsub("LIGHTNINGNJURY" , "LIGHTNING", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("LIGHTNINGND THUNDERSTORM WIN" , "LIGHTNING", stormdata$EVTYPE)
+```
+
+Records for 'event types' below were combined into 'HEAT'.
+"EXCESSIVE HEAT", "HEAT", "DROUGHT/EXCESSIVE HEAT", "EXTREME HEAT", "HEAT WAVE", "HEAT WAVES"
+```{r} 
+stormdata$EVTYPE <- gsub("EXCESSIVE HEAT", "HEAT", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("DROUGHT/EXCESSIVE HEAT", "HEAT", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("EXTREME HEAT", "HEAT", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("HEAT WAVE", "HEAT", stormdata$EVTYPE)
+stormdata$EVTYPE <- gsub("HEAT WAVES", "HEAT", stormdata$EVTYPE)
+
+
+
+```{r} 
+stormdataMelt <- melt(stormdata, id=c("EVTYPE"), measure.vars=c("FATALITIES", "INJURIES"))
+stormdataDcast <- dcast(stormdataMelt, EVTYPE~variable, sum)
+stormdataDcast <- stormdataDcast[with(stormdataDcast, order(-FATALITIES)), ]
+head(stormdataDcast, 5)
+stormdataDcast <- stormdataDcast[with(stormdataDcast, order(-INJURIES)), ]
+head(stormdataDcast, 5)
+```
+
+
+## Results 
+
+Q1
+After cleaning data, different spelling and naming variations for the 5 event types causing the most fatalities or injuries resulted in the list below.
+    EVTYPE FATALITIES INJURIES
+   TORNADO       5633    91346
+      WIND       1014     9961
+      HEAT       3108     9089
+     FLOOD       1526     8598
+ LIGHTNING        817     5230
+ 
+ ```{r}
+ stormdataDcastRemelt <- melt(head(stormdataDcast, 5), id=c("EVTYPE"), measure.vars=c("FATALITIES", "INJURIES"))
+ qplot(EVTYPE, value, data=stormdataDcastRemelt, color=variable)
+ ```
+ 
+Q2
+
+
+## Conclusions
+
+Q1 : - Tornadoes are the number one cause of death from weather events.
+     - Tornadoes are the number one cause of injuries by an order of magnitude.
+	 
+Q2
